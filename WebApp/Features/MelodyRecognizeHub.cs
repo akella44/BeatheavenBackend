@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using AutoMapper;
 using Infrastructure.Data.Entities;
 using Infrastructure.Data.Repositories;
 using MediatR;
@@ -16,26 +17,47 @@ public static class RecognizeMelody
     public class RecognizeResult
     {
         [JsonPropertyName("result")]
-        public List<string> Result { get; set; } = new List<string>();
+        public List<TrackMetadata> Result { get; set; } = new List<TrackMetadata>();
     }
-
+    public class TrackMetadata
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; }
+        [JsonPropertyName("relevance")]
+        public float Relevance { get; set; }
+    }
     public class RecognizeResponse
     {
-        [JsonPropertyName("tracks")] 
-        public List<Track> Tracks { get; set; } = new List<Track>();
+        [JsonPropertyName("tracks")] public List<RecognizeResponseDto> Tracks { get; set; } = new List<RecognizeResponseDto>();
     }
 
+    public class RecognizeResponseDto
+    {
+        public string Name { get; set; }
+        public Artist Artist { get; set; }
+        public Album Album { get; set; }
+        public string YoutubeUrl { get; set; }
+    }
+    public class TrackProfile : Profile
+        {
+            public TrackProfile()
+            {
+                CreateMap<Track, RecognizeResponseDto>();
+            }
+        }
     public record RecognizeCommand(byte[] Bytes) : IRequest<Result<RecognizeResponse, Error>>;
 
     public class RecognizeCommandHandler : IRequestHandler<RecognizeCommand, Result<RecognizeResponse, Error>>
     {
         private readonly HttpClient _httpClient;
         private readonly ISender _sender;
+        private readonly IMapper _mapper;
 
-        public RecognizeCommandHandler(HttpClient httpClient, ISender sender)
+        public RecognizeCommandHandler(HttpClient httpClient, ISender sender, IMapper mapper)
         {
             _httpClient = httpClient;
             _sender = sender;
+            _mapper = mapper;
         }
 
         public async Task<Result<RecognizeResponse, Error>> Handle(RecognizeCommand request, CancellationToken cancellationToken)
@@ -64,13 +86,13 @@ public static class RecognizeMelody
 
             var nnRecognizeResult = JsonSerializer.Deserialize<RecognizeResult>(responseData)!;
             var recognizeResponse = new RecognizeResponse();
-            foreach (var id in nnRecognizeResult.Result)
+            foreach (var metadata in nnRecognizeResult.Result)
             {
-                GetTrack.GetTrackQuery query = new GetTrack.GetTrackQuery(id);
+                GetTrack.GetTrackQuery query = new GetTrack.GetTrackQuery(metadata.Id);
                 Result<Track, Error> getTrackResult = await _sender.Send(query, cancellationToken);
                 if (getTrackResult.IsOk)
                 {
-                    recognizeResponse.Tracks.Add(getTrackResult.Value);
+                    recognizeResponse.Tracks.Add(_mapper.Map<RecognizeResponseDto>(getTrackResult.Value));
                     continue;
                 }
 
