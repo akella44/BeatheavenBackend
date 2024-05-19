@@ -52,16 +52,21 @@ public static class RecognizeMelody
         private readonly HttpClient _httpClient;
         private readonly ISender _sender;
         private readonly IMapper _mapper;
+        private readonly ILogger<RecognizeCommandHandler> _logger;
 
-        public RecognizeCommandHandler(HttpClient httpClient, ISender sender, IMapper mapper)
+        public RecognizeCommandHandler(HttpClient httpClient, ISender sender, IMapper mapper, ILogger<RecognizeCommandHandler> logger)
         {
             _httpClient = httpClient;
             _sender = sender;
             _mapper = mapper;
+            _logger = logger;
         }
 
         public async Task<Result<RecognizeResponse, Error>> Handle(RecognizeCommand request, CancellationToken cancellationToken)
         {
+            if (request.Bytes.Length == 0)
+                return new Error("Request.Empty", "Melody have not been provided");
+            
             await File.WriteAllBytesAsync($"{Guid.NewGuid().ToString().Replace("-", string.Empty).ToLower()}.mp3", request.Bytes, cancellationToken);
 
             var fileContent = new ByteArrayContent(request.Bytes);
@@ -86,6 +91,8 @@ public static class RecognizeMelody
 
             var nnRecognizeResult = JsonSerializer.Deserialize<RecognizeResult>(responseData)!;
             var recognizeResponse = new RecognizeResponse();
+            
+            _logger.LogInformation($"Recognized metric {JsonSerializer.Serialize(nnRecognizeResult)}");
             foreach (var metadata in nnRecognizeResult.Result)
             {
                 GetTrack.GetTrackQuery query = new GetTrack.GetTrackQuery(metadata.Id);
@@ -125,16 +132,21 @@ public class MelodyRecognizeHub : Hub
     
     public async Task SendBytes(byte[] bytes)
     {
+        _logger.LogInformation($"New bytes from connection {Context.ConnectionId}");
         await _audioStreamsRepository.AddBytesToAudioStream(Context.ConnectionId, bytes);
     }
     
-    public async Task GetRecognizeResult()
+    public async Task GetRecognizedResult()
     {
+        _logger.LogInformation($"New get result command from connection {Context.ConnectionId}");
         var bytes = await _audioStreamsRepository.GetAudioStreamBytes(Context.ConnectionId);
         var recognizeCommand =
             new RecognizeMelody.RecognizeCommand(bytes);
         Result<RecognizeMelody.RecognizeResponse, Error> recognizeResult = await _sender.Send(recognizeCommand);
-
+        
+        if(recognizeResult.IsOk)
+            _logger.LogInformation($"Recognize results for {Context.ConnectionId} {JsonSerializer.Serialize(recognizeResult.Value.Tracks.Select(t => t.Name))}");
+        
         await Clients.Caller.SendAsync("RecognizedResults", JsonSerializer.Serialize(recognizeResult.Match<object>(
             success: value => (value),
             failure: error => (new { Error = error.Description })

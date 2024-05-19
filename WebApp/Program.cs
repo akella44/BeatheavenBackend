@@ -1,11 +1,15 @@
 using FluentValidation;
 using Infrastructure.Data.DbContext;
 using Infrastructure.Data.Repositories;
+using Serilog;
 using WebApp.ExceptionHandlers;
 using WebApp.Features;
 using WebApp.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, configuration) =>
+    configuration.ReadFrom.Configuration(context.Configuration));
 
 builder.Services.AddEndpointsApiExplorer();
 
