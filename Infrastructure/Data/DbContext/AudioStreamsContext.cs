@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 
-namespace Infrastructure.Data.Repositories;
+namespace Infrastructure.Data.DbContext;
 
-public class AudioStreamsRepository
+public class AudioStreamsContext
 {
     private readonly ConcurrentDictionary<string, MemoryStream> audioStreams = new ConcurrentDictionary<string, MemoryStream>();
 

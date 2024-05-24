@@ -1,8 +1,11 @@
-﻿using System.Text.Json;
+﻿using System.Net.Sockets;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using AutoMapper;
+using Infrastructure.Data.DbContext;
 using Infrastructure.Data.Entities;
-using Infrastructure.Data.Repositories;
+using System.Net;
+using System.Collections.Concurrent;
 using MediatR;
 using Microsoft.AspNetCore.SignalR;
 using WebApp.Wrappers;
@@ -13,7 +16,6 @@ public static class RecognizeMelody
 {
     private static readonly string NnApiHost = Environment.GetEnvironmentVariable("NN_HOST")!;
     private static readonly int NnApiPort = Convert.ToInt32(Environment.GetEnvironmentVariable("NN_PORT")!);
-
     public class RecognizeResult
     {
         [JsonPropertyName("result")]
@@ -30,7 +32,6 @@ public static class RecognizeMelody
     {
         [JsonPropertyName("tracks")] public List<RecognizeResponseDto> Tracks { get; set; } = new List<RecognizeResponseDto>();
     }
-
     public class RecognizeResponseDto
     {
         public string Name { get; set; }
@@ -39,12 +40,12 @@ public static class RecognizeMelody
         public string YoutubeUrl { get; set; }
     }
     public class TrackProfile : Profile
+    {
+        public TrackProfile()
         {
-            public TrackProfile()
-            {
-                CreateMap<Track, RecognizeResponseDto>();
-            }
+            CreateMap<Track, RecognizeResponseDto>();
         }
+    }
     public record RecognizeCommand(byte[] Bytes) : IRequest<Result<RecognizeResponse, Error>>;
 
     public class RecognizeCommandHandler : IRequestHandler<RecognizeCommand, Result<RecognizeResponse, Error>>
@@ -113,13 +114,12 @@ public static class RecognizeMelody
 
 public class MelodyRecognizeHub : Hub
 {
-    private readonly AudioStreamsRepository _audioStreamsRepository;
+    private readonly AudioStreamsContext _audioStreamsContext;
     private readonly ISender _sender;
     private readonly ILogger<MelodyRecognizeHub> _logger;
-
-    public MelodyRecognizeHub(AudioStreamsRepository audioStreamsRepository, ISender sender, ILogger<MelodyRecognizeHub> logger)
+    public MelodyRecognizeHub(AudioStreamsContext audioStreamsContext, ISender sender, ILogger<MelodyRecognizeHub> logger)
     {
-        _audioStreamsRepository = audioStreamsRepository;
+        _audioStreamsContext = audioStreamsContext;
         _sender = sender;
         _logger = logger;
     }
@@ -133,13 +133,13 @@ public class MelodyRecognizeHub : Hub
     public async Task SendBytes(byte[] bytes)
     {
         _logger.LogInformation($"New bytes from connection {Context.ConnectionId}");
-        await _audioStreamsRepository.AddBytesToAudioStream(Context.ConnectionId, bytes);
+        await _audioStreamsContext.AddBytesToAudioStream(Context.ConnectionId, bytes);
     }
     
     public async Task GetRecognizedResult()
     {
         _logger.LogInformation($"New get result command from connection {Context.ConnectionId}");
-        var bytes = await _audioStreamsRepository.GetAudioStreamBytes(Context.ConnectionId);
+        var bytes = await _audioStreamsContext.GetAudioStreamBytes(Context.ConnectionId);
         var recognizeCommand =
             new RecognizeMelody.RecognizeCommand(bytes);
         Result<RecognizeMelody.RecognizeResponse, Error> recognizeResult = await _sender.Send(recognizeCommand);
@@ -164,7 +164,7 @@ public class MelodyRecognizeHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        await _audioStreamsRepository.ClearAudioStream(Context.ConnectionId);
+        await _audioStreamsContext.ClearAudioStream(Context.ConnectionId);
         
         _logger.LogInformation($"Сonnection with id {Context.ConnectionId} closed");
     }

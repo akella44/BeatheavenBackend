@@ -19,10 +19,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient();
 
 builder.Services.AddScoped<TracksRepository>();
-builder.Services.AddScoped<AppDbContext>();
+builder.Services.AddScoped<MongoDbContext>();
 builder.Services.AddScoped<TracksRepository>();
 
-builder.Services.AddSingleton<AudioStreamsRepository>();
+builder.Services.AddSingleton<AudioStreamsContext>();
 
 builder.Services.AddMediatR(config => config.RegisterServicesFromAssembly(
     typeof(Program).Assembly));

@@ -10,9 +10,9 @@ public class TracksRepository
     
     private readonly string _collection = Environment.GetEnvironmentVariable("MONGO_COLLECTION")!;
     
-    public TracksRepository(AppDbContext appDbContext)
+    public TracksRepository(MongoDbContext mongoDbContext)
     {
-        _tracks = appDbContext.Database.GetCollection<Track>(_collection);
+        _tracks = mongoDbContext.Database.GetCollection<Track>(_collection);
     }
 
     public async Task<Track> GetById(string id)

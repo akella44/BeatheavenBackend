@@ -2,7 +2,7 @@
 using MongoDB.Driver;
 namespace Infrastructure.Data.DbContext;
 
-public class AppDbContext
+public class MongoDbContext
 {
     public IMongoDatabase Database { get; init; }
 
@@ -12,7 +12,7 @@ public class AppDbContext
     private readonly string _username = Environment.GetEnvironmentVariable("MONGO_USER")!;
     private readonly string _password = Environment.GetEnvironmentVariable("MONGO_PWD")!;
     
-    public AppDbContext()
+    public MongoDbContext()
     {
         MongoClientSettings settings = new MongoClientSettings();
         settings.Server = new MongoServerAddress(_mongoHost, _mongoPort);
